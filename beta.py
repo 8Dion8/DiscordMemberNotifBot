@@ -7,59 +7,102 @@ import steammarket as sm
 from numpy import transpose
 from gen_board import gen_board
 import json
+import matplotlib.pyplot as plt
+
+#change plot theme to match discord
+plt.rcParams.update({
+    "figure.facecolor": "#36393E",
+    "figure.edgecolor": "#36393E",
+    "savefig.facecolor": "#36393E",
+    "savefig.edgecolor": "#36393E",
+    "text.color": "white"
+})
 
 print("\n\n\n\n\n\n\n\n")
 
+
+#initialise client
 bot = commands.Bot(command_prefix='$')
 
 asleep = False
 
+#get secret discord token from the .env file
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
+
+#send a message when bot goes online
 @bot.event
 async def on_ready():
     print('Бот онлайн епт')
     channel = bot.get_channel(775400125144498186)
     await channel.send('Бот онлайн епт')
-    await create_json()
-
+    
+#whenever a message is sent to any server, then update the json stats before executing commands
 @bot.event
 async def on_message(message):
+    #load json
     with open("/Users/glebsvarcer/Documents/DiscordMemberNotifBot/data.json","r") as f:
         data = json.load(f)
-    
-    data["users"][str(message.author.id)]["message_count"][str(message.channel.id)] += 1
 
+    #update message count
+    data["users"][str(message.author.id)]["message_count"][str(message.channel.id)]["count"] += 1
+
+    #save json
     with open("/Users/glebsvarcer/Documents/DiscordMemberNotifBot/data.json","w") as f:
         json.dump(data,f)
 
+    #execute commands if any in the message
     await bot.process_commands(message)
 
-
+#resets the json data
 async def create_json():
+    #get bot_testing channel
     channel = bot.get_channel(775400125144498186)
+
+
     data = {
         "users":{
 
         }
     }
+
+    #create the base json structure for every user
     async for member in channel.guild.fetch_members(limit=None):
+
         data["users"][str(member.id)] = {}
         data["users"][str(member.id)]["name"] = member.name
         data["users"][str(member.id)]["discriminator"] = member.discriminator
         data["users"][str(member.id)]["message_count"] = {}
+
+        print(data)
+
         for guild in bot.guilds:
             for channel in guild.text_channels:
-                data["users"][str(member.id)]["message_count"][str(channel.id)] = 0
+                data["users"][str(member.id)]["message_count"][str(channel.id)] = {
+                    "name":channel.name,
+                    "count":0
+                }
+
+    print(data)
+
+    #update each user's data based on the message history
+    for guild in bot.guilds:
+        for channel in guild.text_channels:
+            #get message history
+            messages = await channel.history(limit=200).flatten()
+            for message in messages:
+                #update the message count
+                data["users"][str(message.author.id)]["message_count"][str(channel.id)]["count"] += 1
 
     print(json.dumps(data,indent=4))
 
+    #save data
     with open("/Users/glebsvarcer/Documents/DiscordMemberNotifBot/data.json","w") as f:
         json.dump(data,f)
 
 
-
+#define a help command
 @bot.command()
 async def help_me(ctx):
     if not asleep:
@@ -80,6 +123,8 @@ async def help_me(ctx):
         ```'''
         await ctx.send(message)
 
+
+#define a command that picks CSGO Wingman maps at random
 @bot.command()
 async def map(ctx, mode, amount):
     if not asleep:
@@ -94,6 +139,9 @@ async def map(ctx, mode, amount):
             await ctx.send(formatted)
         except:
             await ctx.send("Ты где-т накосячил. Либо режим шизоидный, либо карт дохуя хочешь. Валв столько не делает своей ленивой жопой))")
+
+
+#define a command that sends Steam Community Market prices for a given item
 @bot.command()
 async def case(ctx, name):
     if not asleep:
@@ -302,6 +350,78 @@ async def cum(ctx):
     if not asleep:
         await ctx.send(file=discord.File('maxresdefault.jpg'))
 
+@bot.command()
+async def reset_data(ctx):
+    if ctx.message.author.id == 420905534535892992:
+        await create_json()
+        await ctx.send("Данные созданы заново.")
+    else:
+        ctx.send("Хорошая попытка но не, у тя прав нет")
+    
+def make_autopct(values):
+    def my_autopct(pct):
+        total = sum(values)
+        val = int(round(pct*total/100.0))
+        return '{v:d}'.format(v=val)
+    return my_autopct
 
+@bot.command()
+async def stats(ctx, target, name):
+    if target == "user":
+        user_id = name[3:len(name)-1]
+        with open("/Users/glebsvarcer/Documents/DiscordMemberNotifBot/data.json","r") as f:
+            data = json.load(f)
+        channels = data["users"][user_id]["message_count"]
+        channel_data = {}
+        for channel in channels.keys():
+            count = channels[channel]["count"]
+            if count != 0:
+                channel_data[channels[channel]["name"]] = count
+
+        fig1, ax1 = plt.subplots()
+        ax1.pie(channel_data.values(),labels=channel_data.keys(),autopct=make_autopct(channel_data.values()),colors=['#7289DA','#2c2f33','#99aab5','#23272A'])
+        ax1.axis('equal')
+        plt.savefig('chart.png')
+        await ctx.send(file=discord.File('chart.png'))
+    elif target == "channel":
+        with open("/Users/glebsvarcer/Documents/DiscordMemberNotifBot/data.json","r") as f:
+            data = json.load(f)
+        users = data["users"]
+        
+        user_data = {}
+
+        for user in users.keys():
+            channels = users[user]["message_count"]
+            for channel in channels.keys():
+                if channels[channel]["name"] == name:
+                    count = channels[channel]["count"]
+                    if count != 0:
+                        user_data[users[user]["name"]] = count
+                    break
+
+        fig1, ax1 = plt.subplots()
+        ax1.pie(user_data.values(),labels=user_data.keys(),autopct=make_autopct(user_data.values()),colors=['#7289DA','#2c2f33','#99aab5','#23272A'])
+        ax1.axis('equal')
+        plt.savefig('chart.png')
+        await ctx.send(file=discord.File('chart.png'))
+    elif target == "all":
+        with open("/Users/glebsvarcer/Documents/DiscordMemberNotifBot/data.json","r") as f:
+            data = json.load(f)
+        
+        if name == "users":
+
+            channel_data = {}
+
+            for user in users.keys():
+                name = users
+
+@bot.command()
+async def source(ctx, file):
+    if file == 'main':
+        await ctx.send('```py\n'+open(__file__).read()+'\n```')
+    elif file == 'json':
+        with open("/Users/glebsvarcer/Documents/DiscordMemberNotifBot/data.json","r") as f:
+            data = json.load(f)
+        await ctx.send('```js\n'+pprint.pformat(data)+'\n```')
 
 bot.run(TOKEN)
