@@ -415,13 +415,4 @@ async def stats(ctx, target, name):
             for user in users.keys():
                 name = users
 
-@bot.command()
-async def source(ctx, file):
-    if file == 'main':
-        await ctx.send('```py\n'+open(__file__).read()+'\n```')
-    elif file == 'json':
-        with open("/Users/glebsvarcer/Documents/DiscordMemberNotifBot/data.json","r") as f:
-            data = json.load(f)
-        await ctx.send('```js\n'+pprint.pformat(data)+'\n```')
-
 bot.run(TOKEN)
